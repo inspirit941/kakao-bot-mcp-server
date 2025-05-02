@@ -3,12 +3,17 @@ import logging
 import subprocess
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler,HTTPServer
+import traceback
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from mcp import Tool
 from mcp.server import Server
+from mcp.types import TextContent, ImageContent, EmbeddedResource
+from typing_extensions import Any, Sequence
 
-from src.mcp_kakao import kauth, toolhandler
+from mcp_kakao import toolhandler
+from mcp_kakao import kauth, tools_message
 
 
 class OauthListener(BaseHTTPRequestHandler):
@@ -37,9 +42,11 @@ class OauthListener(BaseHTTPRequestHandler):
         t.daemon = True
         t.start()
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp-kakao")
+
 
 def start_auth_flow(email_address: str, state: str):
     auth_url = kauth.get_authorization_url(email_address, state=state)
@@ -53,6 +60,7 @@ def start_auth_flow(email_address: str, state: str):
     server_address = ('', 8000)
     server = HTTPServer(server_address, OauthListener)
     server.serve_forever()
+
 
 def setup_oauth2(email_address: str):
     accounts = kauth.get_account_info()
@@ -73,6 +81,7 @@ def setup_oauth2(email_address: str):
         logging.error(f"User info: {json.dumps(user_info)}")
         kauth.store_credentials(credentials=credentials, email_address=email_address)
 
+
 app = Server("mcp-kakao")
 
 tool_handlers = {}
@@ -89,3 +98,52 @@ def get_tool_handler(name: str) -> toolhandler.ToolHandler | None:
         return None
 
     return tool_handlers[name]
+
+
+add_tool_handler(tools_message.SendMessageToMeToolHandler())
+
+
+@app.list_tools()
+async def list_tools() -> list[Tool]:
+    """List available tools."""
+    return [th.get_tool_description() for th in tool_handlers.values()]
+
+
+@app.call_tool()
+async def call_tool(name: str, arguments: Any) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+    try:
+        if not isinstance(arguments, dict):
+            raise RuntimeError("arguments must be dictionary")
+
+        if toolhandler.EMAIL_ADDRESS_ARG not in arguments:
+            raise RuntimeError("user_id argument is missing in dictionary.")
+
+        setup_oauth2(email_address=arguments.get(toolhandler.EMAIL_ADDRESS_ARG, ""))
+
+        tool_handler = get_tool_handler(name)
+        if not tool_handler:
+            raise ValueError(f"Unknown tool: {name}")
+
+        return tool_handler.run_tool(arguments)
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        logging.error(f"Error during call_tool: str(e)")
+        raise RuntimeError(f"Caught Exception. Error: {str(e)}")
+
+
+async def main():
+    print(sys.platform)
+    accounts = kauth.get_account_info()
+    for account in accounts:
+        creds = kauth.get_stored_credentials(email_address=account.email)
+        if creds:
+            logging.info(f"found credentials for {account.email}")
+
+    from mcp.server.stdio import stdio_server
+
+    async with stdio_server() as (read_stream, write_stream):
+        await app.run(
+            read_stream,
+            write_stream,
+            app.create_initialization_options()
+        )

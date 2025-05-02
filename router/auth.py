@@ -1,13 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request, Form
-from fastapi.responses import RedirectResponse
-import httpx
+from fastapi import APIRouter, Request
 import os
 from typing import Optional
-from pydantic import BaseModel
 import logging
 from urllib.parse import urlencode
 
-from src.mcp_kakao import kauth
+from mcp_kakao import kauth
 
 # Set up logger
 logger = logging.getLogger(__name__)

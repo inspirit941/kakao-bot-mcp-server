@@ -6,10 +6,26 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.12",
-    "fastapi-mcp>=0.3.3",
     "httpx>=0.28.1",
     "itsdangerous>=2.2.0",
+    "mcp[cli]>=1.6.0",
     "oauth2client>=4.1.3",
     "python-multipart>=0.0.20",
     "requests>=2.32.3",
 ]
+
+[[project.authors]]
+name = "Donggeon Lee"
+email = "inspirit941@gmail.com"
+
+[project.scripts]
+mcp-kakao = "mcp_kakao.server:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["mcp_kakao"]
+
