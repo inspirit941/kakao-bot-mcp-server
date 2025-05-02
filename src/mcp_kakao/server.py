@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 import sys
@@ -5,7 +6,9 @@ import threading
 from http.server import BaseHTTPRequestHandler,HTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from src.mcp_kakao import kauth
+from mcp.server import Server
+
+from src.mcp_kakao import kauth, toolhandler
 
 
 class OauthListener(BaseHTTPRequestHandler):
@@ -67,5 +70,22 @@ def setup_oauth2(user_id: str):
 
         # this call refreshes access token
         user_info = kauth.get_user_info(credentials=credentials)
-        #logging.error(f"User info: {json.dumps(user_info)}")
+        logging.error(f"User info: {json.dumps(user_info)}")
         kauth.store_credentials(credentials=credentials, email_address=user_id)
+
+app = Server("mcp-kakao")
+
+tool_handlers = {}
+
+
+def add_tool_handler(tool_class: toolhandler.ToolHandler):
+    global tool_handlers
+
+    tool_handlers[tool_class.name] = tool_class
+
+
+def get_tool_handler(name: str) -> toolhandler.ToolHandler | None:
+    if name not in tool_handlers:
+        return None
+
+    return tool_handlers[name]
