@@ -131,7 +131,7 @@ async def call_tool(name: str, arguments: Any) -> Sequence[TextContent | ImageCo
         raise RuntimeError(f"Caught Exception. Error: {str(e)}")
 
 
-async def main():
+async def run():
     print(sys.platform)
     accounts = kauth.get_account_info()
     for account in accounts:
@@ -147,3 +147,7 @@ async def main():
             write_stream,
             app.create_initialization_options()
         )
+
+def main():
+    import asyncio
+    asyncio.run(run())
