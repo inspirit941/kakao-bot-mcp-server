@@ -120,7 +120,7 @@ def _get_credential_filename(email_address: str) -> str:
     return os.path.join(creds_dir, f".oauth2.{email_address}.json")
 
 
-def get_authorization_url(state: str):
+def get_authorization_url(email_address: str, state: str):
     """Retrieve the authorization URL.
 
     Args:
@@ -385,10 +385,10 @@ def get_credentials(authorization_code, state):
         # Drive apps should try to retrieve the user and credentials for the current
         # session.
         # If none is available, redirect the user to the authorization URL.
-        error.authorization_url = get_authorization_url(state)
+        error.authorization_url = get_authorization_url(email_address=email_address, state=state)
         raise error
     except NoUserEmailException:
         logging.error("No user email could be retrieved.")
         # No refresh token has been retrieved.
-    authorization_url = get_authorization_url(state)
+    authorization_url = get_authorization_url(email_address=email_address, state=state)
     raise NoRefreshTokenException(authorization_url)
