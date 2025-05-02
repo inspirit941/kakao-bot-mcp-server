@@ -1,0 +1,22 @@
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - kauthFile
+      - accountsFile
+    properties:
+      kauthFile:
+        type: string
+        description: Path to the OAuth2 client configuration file.
+      accountsFile:
+        type: string
+        description: Path to the kakao accounts configuration file.
+      credentialsDir:
+        type: string
+        description: Directory where OAuth credentials are stored.
+  commandFunction:
+    # A function that produces the CLI command to start the MCP on stdio.
+    |-
+    (config) => ({command: 'uv', args: ['run', 'mcp-kakao', '--kauth-file', config.kauthFile, '--accounts-file', config.accountsFile, '--credentials-dir', config.credentialsDir]})
