@@ -1,6 +1,8 @@
 import argparse
 import logging
 import os
+
+import pydantic
 import requests
 import json
 import time
@@ -39,23 +41,6 @@ TOKEN_INFO_URL = "https://kapi.kakao.com/v1/user/access_token_info"
 SCOPES = ["openid", "profile_nickname", "talk_message", "account_email"]
 
 
-def get_authorization_url(state: str):
-    """Retrieve the authorization URL.
-
-    Args:
-    email_address: User's e-mail address.
-    state: State for the authorization URL.
-    Returns:
-    Authorization URL to redirect the user to.
-    """
-    flow = flow_from_clientsecrets(
-        CLIENTSECRETS_LOCATION, " ".join(SCOPES), redirect_uri=REDIRECT_URI
-    )
-    if state != "":
-        flow.params["state"] = state
-    return flow.step1_get_authorize_url(state=state)
-
-
 class GetCredentialsException(Exception):
     """Error raised when an error occurred while retrieving credentials.
 
@@ -86,6 +71,38 @@ class TokenRefreshError(Exception):
     pass
 
 
+class AccountInfo(pydantic.BaseModel):
+    email: str
+    account_type: str
+    extra_info: str
+
+    def __init__(self, email: str, account_type: str, extra_info: str = ""):
+        super().__init__(email=email, account_type=account_type, extra_info=extra_info)
+
+    def to_description(self):
+        return f"""Account for email: {self.email} of type: {self.account_type}. Extra info for: {self.extra_info}"""
+
+
+def get_accounts_file() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--accounts-file",
+        type=str,
+        default="./.accounts.json",
+        help="Path to accounts configuration file",
+    )
+    args, _ = parser.parse_known_args()
+    return args.accounts_file
+
+
+def get_account_info() -> list[AccountInfo]:
+    accounts_file = get_accounts_file()
+    with open(accounts_file) as f:
+        data = json.load(f)
+        accounts = data.get("accounts", [])
+        return [AccountInfo.model_validate(acc) for acc in accounts]
+
+
 def get_credentials_dir() -> str:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -101,6 +118,35 @@ def get_credentials_dir() -> str:
 def _get_credential_filename(email_address: str) -> str:
     creds_dir = get_credentials_dir()
     return os.path.join(creds_dir, f".oauth2.{email_address}.json")
+
+
+def get_authorization_url(state: str):
+    """Retrieve the authorization URL.
+
+    Args:
+    email_address: User's e-mail address.
+    state: State for the authorization URL.
+    Returns:
+    Authorization URL to redirect the user to.
+    """
+    flow = flow_from_clientsecrets(
+        CLIENTSECRETS_LOCATION, " ".join(SCOPES), redirect_uri=REDIRECT_URI
+    )
+    if state != "":
+        flow.params["state"] = state
+    return flow.step1_get_authorize_url(state=state)
+
+
+def get_accounts_file() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--accounts-file",
+        type=str,
+        default="./.accounts.json",
+        help="Path to accounts configuration file",
+    )
+    args, _ = parser.parse_known_args()
+    return args.accounts_file
 
 
 def get_stored_credentials(email_address: str) -> OAuth2Credentials | None:
