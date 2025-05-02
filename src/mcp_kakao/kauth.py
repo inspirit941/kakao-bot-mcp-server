@@ -4,6 +4,7 @@ import os
 import requests
 import json
 import time
+import httplib2
 
 from oauth2client.client import (
     flow_from_clientsecrets,
@@ -76,8 +77,13 @@ class NoRefreshTokenException(GetCredentialsException):
     """Error raised when no refresh token has been found."""
 
 
-class NoUserIdException(Exception):
+class NoUserEmailException(Exception):
     """Error raised when no user ID could be retrieved."""
+
+
+class TokenRefreshError(Exception):
+    """Error raised when token refresh fails."""
+    pass
 
 
 def get_credentials_dir() -> str:
@@ -92,22 +98,21 @@ def get_credentials_dir() -> str:
     return args.credentials_dir
 
 
-def _get_credential_filename(user_id: str) -> str:
+def _get_credential_filename(email_address: str) -> str:
     creds_dir = get_credentials_dir()
-    return os.path.join(creds_dir, f".oauth2.{user_id}.json")
+    return os.path.join(creds_dir, f".oauth2.{email_address}.json")
 
 
-def get_stored_credentials(user_id: str) -> OAuth2Credentials | None:
+def get_stored_credentials(email_address: str) -> OAuth2Credentials | None:
     """Retrieved stored credentials for the provided user ID.
 
     Args:
-    user_id: User's ID.
+    email_address: User's email address.
     Returns:
     Stored oauth2client.client.OAuth2Credentials if found, None otherwise.
     """
     try:
-
-        cred_file_path = _get_credential_filename(user_id=user_id)
+        cred_file_path = _get_credential_filename(email_address=email_address)
         if not os.path.exists(cred_file_path):
             logging.warning(
                 f"No stored Oauth2 credentials yet at path: {cred_file_path}"
@@ -124,9 +129,9 @@ def get_stored_credentials(user_id: str) -> OAuth2Credentials | None:
     raise None
 
 
-def store_credentials(credentials: OAuth2Credentials, user_id: str):
+def store_credentials(credentials: OAuth2Credentials, email_address: str):
     """Store OAuth 2.0 credentials in the specified directory."""
-    cred_file_path = _get_credential_filename(user_id=user_id)
+    cred_file_path = _get_credential_filename(email_address=email_address)
     os.makedirs(os.path.dirname(cred_file_path), exist_ok=True)
 
     data = credentials.to_json()
@@ -157,6 +162,77 @@ def exchange_code(authorization_code):
         raise CodeExchangeException(None)
 
 
+def refresh_token(credentials: OAuth2Credentials):
+    """Refresh the access token of the given credentials if expired.
+
+    Args:
+        credentials: OAuth2Credentials instance with refresh token
+
+    Returns:
+        Updated OAuth2Credentials instance
+
+    Raises:
+        TokenRefreshError: If token refresh fails
+    """
+    if not credentials.refresh_token:
+        logging.error("No refresh token available")
+        raise TokenRefreshError("No refresh token available")
+
+    if not credentials.access_token_expired:
+        # Token not expired, no need to refresh
+        return credentials
+
+    try:
+        logging.info("Access token expired, refreshing...")
+
+        # Get client credentials from file
+        with open(CLIENTSECRETS_LOCATION, "r") as f:
+            client_secret_data = json.load(f)
+
+        client_id = client_secret_data.get("web", {}).get("client_id")
+        client_secret = client_secret_data.get("web", {}).get("client_secret")
+
+        if not client_id or not client_secret:
+            raise TokenRefreshError(
+                "Client ID or secret not found in client secrets file"
+            )
+
+        # Simple refresh token request
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": credentials.refresh_token,
+        }
+
+        response = requests.post(KAKAO_TOKEN_URL, data=refresh_data)
+
+        if response.status_code != 200:
+            logging.error(f"Token refresh failed: {response.status_code}")
+            logging.error(f"Response content: {response.text}")
+            raise TokenRefreshError(f"Token refresh failed: {response.status_code}")
+
+        token_data = response.json()
+
+        credentials = credentials.from_json(token_data)
+        # Update the credentials with new data
+        # credentials.access_token = token_data["access_token"]
+        # credentials.token_expiry = credentials._datetime_from_seconds(
+        #     int(time.time()) + token_data["expires_in"]
+        # )
+        #
+        # # Some implementations return a new refresh token, check if one is included
+        # if "refresh_token" in token_data:
+        #     credentials.refresh_token = token_data["refresh_token"]
+
+        logging.info("Successfully refreshed access token")
+        return credentials
+
+    except Exception as e:
+        logging.error(f"Token refresh failed: {str(e)}")
+        raise TokenRefreshError(f"Error refreshing token: {str(e)}")
+
+
 def get_user_info(credentials: OAuth2Credentials):
     """Send a request to the UserInfo API to retrieve the user's information.
 
@@ -167,7 +243,12 @@ def get_user_info(credentials: OAuth2Credentials):
     User information as a dict.
     """
     try:
-        # Kakao API requires Bearer token authentication
+        # Check if the access token is expired and refresh if needed
+        if credentials.access_token_expired:
+            logging.info("Access token is expired, refreshing")
+            credentials = refresh_token(credentials)
+
+        # Make the request with current/refreshed token
         headers = {
             "Authorization": f"Bearer {credentials.access_token}",
             "Content-type": "application/x-www-form-urlencoded;charset=utf-8",
@@ -186,14 +267,16 @@ def get_user_info(credentials: OAuth2Credentials):
         user_info = response.json()
 
         # Verify the user has an ID
-        if not user_info or "id" not in user_info:
+        if not user_info or "kakao_account" not in user_info or "email" not in user_info["kakao_account"]:
             logging.error("No user ID found in response")
-            raise NoUserIdException()
+            raise NoUserEmailException()
 
-        # Log successful retrieval
-        logging.info(f'Successfully retrieved user info for user ID: {user_info["id"]}')
-
+        # Store refreshed credentials with user ID if we just refreshed the token
+        email_address = user_info["kakao_account"]["email"]
+        store_credentials(credentials, email_address=email_address)
         return user_info
+    except TokenRefreshError as e:
+        raise e
     except Exception as e:
         logging.error(f"An error occurred retrieving user info: {e}")
         raise
@@ -232,9 +315,9 @@ def get_credentials(authorization_code, state):
                 user_info = get_user_info(credentials)
                 # If we have user email, use it as the identifier
                 if (
-                    user_info
-                    and "kakao_account" in user_info
-                    and "email" in user_info["kakao_account"]
+                        user_info
+                        and "kakao_account" in user_info
+                        and "email" in user_info["kakao_account"]
                 ):
                     email_address = user_info["kakao_account"]["email"]
                 # Otherwise use Kakao user ID
@@ -245,10 +328,10 @@ def get_credentials(authorization_code, state):
                 # Use a timestamp as a fallback for the credential filename
                 email_address = f"user_{int(time.time())}"
 
-            store_credentials(credentials, user_id=email_address)
+            store_credentials(credentials, email_address=email_address)
             return credentials
         else:
-            credentials = get_stored_credentials(user_id=email_address)
+            credentials = get_stored_credentials(email_address=email_address)
             if credentials and credentials.refresh_token is not None:
                 return credentials
     except CodeExchangeException as error:
@@ -258,8 +341,8 @@ def get_credentials(authorization_code, state):
         # If none is available, redirect the user to the authorization URL.
         error.authorization_url = get_authorization_url(state)
         raise error
-    except NoUserIdException:
-        logging.error("No user ID could be retrieved.")
+    except NoUserEmailException:
+        logging.error("No user email could be retrieved.")
         # No refresh token has been retrieved.
     authorization_url = get_authorization_url(state)
     raise NoRefreshTokenException(authorization_url)

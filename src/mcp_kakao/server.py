@@ -58,7 +58,7 @@ def setup_oauth2(user_id: str):
     # if user_id not in [a.email for a in accounts]:
     #     raise RuntimeError(f"Account for email: {user_id} not specified in .gauth.json")
 
-    credentials = kauth.get_stored_credentials(user_id=user_id)
+    credentials = kauth.get_stored_credentials(email_address=user_id)
     if not credentials:
         start_auth_flow(user_id=user_id)
     else:
@@ -68,4 +68,4 @@ def setup_oauth2(user_id: str):
         # this call refreshes access token
         user_info = kauth.get_user_info(credentials=credentials)
         #logging.error(f"User info: {json.dumps(user_info)}")
-        kauth.store_credentials(credentials=credentials, user_id=user_id)
+        kauth.store_credentials(credentials=credentials, email_address=user_id)
