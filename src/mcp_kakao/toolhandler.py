@@ -18,7 +18,7 @@ class ToolHandler():
     def get_account_descriptions(self) -> list[str]:
         return [a.to_description() for a in kauth.get_account_info()]
 
-    # we ingest this information into every tool that requires a specified __user_id__.
+    # we ingest this information into every tool that requires a specified __email_address__.
     # we also add what information actually can be used (account info). This way Claude
     # will know what to do.
     def get_supported_emails_tool_text(self) -> str:
@@ -27,7 +27,7 @@ class ToolHandler():
     def get_email_address_arg_schema(self) -> dict:
         return {
             "type": "string",
-            "description": f"The EMAIL of the Google account for which you are executing this action. Can be one of: {', '.join(self.get_account_descriptions())}"
+            "description": f"The EMAIL of the kakao account for which you are executing this action. Can be one of: {', '.join(self.get_account_descriptions())}"
         }
 
     def get_tool_description(self) -> Tool:

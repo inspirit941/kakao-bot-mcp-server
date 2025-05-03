@@ -1,4 +1,6 @@
-from mcp.types import Tool
+from typing import Sequence
+
+from mcp.types import Tool, TextContent, ImageContent, EmbeddedResource
 
 from mcp_kakao import toolhandler
 from mcp_kakao.kauth import (
@@ -23,8 +25,9 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             description="Sends a kakao talk message to me.",
             inputSchema={
                 "type": "object",
-                "required": ["template_object"],
+                "required": ["template_object", toolhandler.EMAIL_ADDRESS_ARG],
                 "properties": {
+                    "__email_address__": self.get_email_address_arg_schema(),
                     "template_object": {
                         "type": "object",
                         "required": ["object_type"],
@@ -499,32 +502,32 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
                                 "required": ["object_type", "content", "commerce"],
                             },
                         ],
-                    }
+                    },
                 },
             },
         )
 
-    def execute(self, tool_input):
+    def run_tool(
+        self, args: dict
+    ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
         try:
             # Extract template_object from input or initialize empty dict
-            template_object = tool_input.get("template_object", {})
+            template_object = args.get("template_object", {})
             if not template_object:
                 return {"error": "Missing required parameter: template_object"}
 
             # Get object_type and set defaults based on type
             object_type = template_object.get("object_type")
             if not object_type:
-                return {
-                    "error": "Missing required parameter: object_type in template_object"
-                }
+                raise RuntimeError("object_type is missing")
 
             # Apply defaults based on message type
             if object_type == "text":
                 # Check for required fields
                 if "text" not in template_object:
-                    return {
-                        "error": "Missing required field 'text' for text type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'text' for text type message"
+                    )
 
                 # Set defaults for text type
                 if "link" not in template_object:
@@ -540,21 +543,21 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             elif object_type == "commerce":
                 # Check for required fields
                 if "content" not in template_object:
-                    return {
-                        "error": "Missing required field 'content' for commerce type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'content' for commerce type message"
+                    )
                 if "commerce" not in template_object:
-                    return {
-                        "error": "Missing required field 'commerce' for commerce type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'commerce' for commerce type message"
+                    )
 
                 content = template_object["content"]
 
                 # Check and set defaults for content
                 if "title" not in content:
-                    return {
-                        "error": "Missing required field 'title' in content for commerce type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'title' for commerce type message"
+                    )
                 if "link" not in content:
                     content["link"] = {}
 
@@ -569,20 +572,20 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
                 # Check commerce object
                 commerce = template_object["commerce"]
                 if "regular_price" not in commerce:
-                    return {
-                        "error": "Missing required field 'regular_price' in commerce object"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'regular_price' for commerce type message"
+                    )
 
             elif object_type == "list":
                 # Check for required fields
                 if "header_title" not in template_object:
-                    return {
-                        "error": "Missing required field 'header_title' for list type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'header_title' for commerce type message"
+                    )
                 if "contents" not in template_object:
-                    return {
-                        "error": "Missing required field 'contents' for list type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'contents' for commerce type message"
+                    )
 
                 # Set default header_link if not provided
                 if "header_link" not in template_object:
@@ -600,15 +603,15 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
                 # Check and set defaults for contents
                 contents = template_object["contents"]
                 if not contents:
-                    return {
-                        "error": "Contents list cannot be empty for list type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'contents' for commerce type message"
+                    )
 
                 for content in contents:
                     if "title" not in content:
-                        return {
-                            "error": "Missing required field 'title' in a content item"
-                        }
+                        raise RuntimeError(
+                            "Missing required field 'title' for commerce type message"
+                        )
                     if "link" not in content:
                         content["link"] = {}
 
@@ -624,25 +627,25 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             elif object_type == "feed":
                 # Check required fields
                 if "content" not in template_object:
-                    return {
-                        "error": "Missing required field 'content' for feed type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'content' for feed type message"
+                    )
 
                 content = template_object["content"]
 
                 # Check required content fields
                 if "title" not in content:
-                    return {
-                        "error": "Missing required field 'title' in content for feed type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'title' for feed type message"
+                    )
                 if "description" not in content:
-                    return {
-                        "error": "Missing required field 'description' in content for feed type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'description' for feed type message"
+                    )
                 if "image_url" not in content:
-                    return {
-                        "error": "Missing required field 'image_url' in content for feed type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'image_url' for feed type message"
+                    )
                 if "link" not in content:
                     content["link"] = {}
 
@@ -654,25 +657,25 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             elif object_type == "location":
                 # Check required fields
                 if "content" not in template_object:
-                    return {
-                        "error": "Missing required field 'content' for location type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'content' for location type message"
+                    )
                 if "address" not in template_object:
-                    return {
-                        "error": "Missing required field 'address' for location type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'address' for location type message"
+                    )
 
                 content = template_object["content"]
 
                 # Check required content fields
                 if "title" not in content:
-                    return {
-                        "error": "Missing required field 'title' in content for location type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'title' for location type message"
+                    )
                 if "image_url" not in content:
-                    return {
-                        "error": "Missing required field 'image_url' in content for location type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'image_url' for location type message"
+                    )
                 if "link" not in content:
                     content["link"] = {}
 
@@ -687,29 +690,29 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             elif object_type == "calendar":
                 # Check required fields
                 if "content" not in template_object:
-                    return {
-                        "error": "Missing required field 'content' for calendar type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'content' for calendar type message"
+                    )
                 if "id_type" not in template_object:
-                    return {
-                        "error": "Missing required field 'id_type' for calendar type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'id_type' for calendar type message"
+                    )
                 if "id" not in template_object:
-                    return {
-                        "error": "Missing required field 'id' for calendar type message"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'id' for calendar type message"
+                    )
 
                 content = template_object["content"]
 
                 # Check required content fields
                 if "title" not in content:
-                    return {
-                        "error": "Missing required field 'title' in content for calendar type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'title' for calendar type message"
+                    )
                 if "description" not in content:
-                    return {
-                        "error": "Missing required field 'description' in content for calendar type"
-                    }
+                    raise RuntimeError(
+                        "Missing required field 'description' for calendar type message"
+                    )
                 if "link" not in content:
                     content["link"] = {}
 
@@ -730,12 +733,12 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
                 logging.warning(f"Failed to get account info: {e}")
 
             if not email_address:
-                return {"error": "No authenticated user found"}
+                raise RuntimeError("Failed to get account info")
 
             # Get user credentials
             credentials = get_stored_credentials(email_address)
             if not credentials:
-                return {"error": f"No credentials found for user {email_address}"}
+                raise RuntimeError("Failed to get stored credentials")
 
             # Refresh token if expired
             if credentials.access_token_expired:
@@ -757,20 +760,22 @@ class SendMessageToMeToolHandler(toolhandler.ToolHandler):
             )
 
             if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Message sent successfully",
-                    "response": response.json(),
-                }
+                return [
+                    TextContent(
+                        type="text",
+                        text=json.dumps(response.json()),
+                    )
+                ]
             else:
                 logging.error(
                     f"Failed to send message: {response.status_code}, {response.text}"
                 )
-                return {
-                    "success": False,
-                    "error": f"Failed to send message: {response.status_code}",
-                    "details": response.text,
-                }
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Failed to send message: {response.status_code}, {response.text}",
+                    )
+                ]
 
         except Exception as e:
             logging.error(f"Error in send_message_to_me: {str(e)}")

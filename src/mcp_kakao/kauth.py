@@ -36,7 +36,7 @@ def get_kauth_file() -> str:
 CLIENTSECRETS_LOCATION = get_kauth_file()
 
 # Configuration - should be moved to environment variables
-REDIRECT_URI = "http://localhost:8000/auth/callback"
+REDIRECT_URI = "http://localhost:8000/code"
 TOKEN_INFO_URL = "https://kapi.kakao.com/v1/user/access_token_info"
 SCOPES = ["openid", "profile_nickname", "talk_message", "account_email"]
 
@@ -328,7 +328,7 @@ def get_user_info(credentials: OAuth2Credentials):
         raise
 
 
-def get_credentials(authorization_code, state):
+def get_credentials(authorization_code: str, state: str):
     """Retrieve credentials using the provided authorization code.
 
     This function exchanges the authorization code for an access token and queries
@@ -354,7 +354,6 @@ def get_credentials(authorization_code, state):
     try:
         credentials = exchange_code(authorization_code)
         import json
-
         if credentials.refresh_token is not None:
             # Get user info to store with credentials
             try:

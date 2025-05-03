@@ -36,7 +36,7 @@ class OauthListener(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         storage = {}
-        creds = kauth.get_credentials(authorization_code=query["code"][0], state=storage)
+        creds = kauth.get_credentials(authorization_code=query["code"][0], state="")
 
         t = threading.Thread(target=self.server.shutdown)
         t.daemon = True
@@ -51,13 +51,13 @@ logger = logging.getLogger("mcp-kakao")
 def start_auth_flow(email_address: str, state: str):
     auth_url = kauth.get_authorization_url(email_address, state=state)
     if sys.platform == "darwin" or sys.platform.startswith("linux"):
-        subprocess.Popen(['open', auth_url])
+        subprocess.Popen(["open", auth_url])
     else:
         import webbrowser
         webbrowser.open(auth_url)
 
     # start server for code callback
-    server_address = ('', 8000)
+    server_address = ("", 8000)
     server = HTTPServer(server_address, OauthListener)
     server.serve_forever()
 
@@ -67,11 +67,13 @@ def setup_oauth2(email_address: str):
     if len(accounts) == 0:
         raise RuntimeError("No accounts specified in .accounts.json")
     if email_address not in [a.email for a in accounts]:
-        raise RuntimeError(f"Account for email: {email_address} not specified in .accounts.json")
+        raise RuntimeError(
+            f"Account for email: {email_address} not specified in .accounts.json"
+        )
 
     credentials = kauth.get_stored_credentials(email_address=email_address)
     if not credentials:
-        start_auth_flow(email_address=email_address)
+        start_auth_flow(email_address=email_address, state="")
     else:
         if credentials.access_token_expired:
             logger.error("credentials expired. try refresh")
@@ -110,13 +112,15 @@ async def list_tools() -> list[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: Any) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+async def call_tool(
+    name: str, arguments: Any
+) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
     try:
         if not isinstance(arguments, dict):
             raise RuntimeError("arguments must be dictionary")
 
         if toolhandler.EMAIL_ADDRESS_ARG not in arguments:
-            raise RuntimeError("user_id argument is missing in dictionary.")
+            raise RuntimeError("email_address argument is missing in dictionary.")
 
         setup_oauth2(email_address=arguments.get(toolhandler.EMAIL_ADDRESS_ARG, ""))
 
@@ -142,8 +146,4 @@ async def main():
     from mcp.server.stdio import stdio_server
 
     async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options()
-        )
+        await app.run(read_stream, write_stream, app.create_initialization_options())
