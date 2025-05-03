@@ -39,8 +39,8 @@ class KakaoMessageService:
             "Authorization": f"Bearer {self.credential.access_token}",
             "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         }
-        # Convert Pydantic model to dictionary and then to JSON string
-        data = {"template_object": json.dumps(template_object.model_dump())}
+        # Convert Pydantic model to dictionary using mode='json' for JSON compatibility
+        data = {"template_object": json.dumps(template_object.model_dump(mode="json"))}
 
         logging.info(f"Sending Kakao message with template object: {template_object}")
         response = requests.post(KAKAO_SEND_MESSAGE_URL, headers=headers, data=data)

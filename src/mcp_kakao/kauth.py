@@ -6,7 +6,6 @@ import pydantic
 import requests
 import json
 import time
-import httplib2
 
 from oauth2client.client import (
     flow_from_clientsecrets,
