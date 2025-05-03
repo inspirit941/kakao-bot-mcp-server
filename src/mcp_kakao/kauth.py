@@ -33,6 +33,30 @@ def get_kauth_file() -> str:
     return args.kauth_file
 
 
+def get_credentials_dir() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--credentials-dir",
+        type=str,
+        default=".",
+        help="Directory to store OAuth2 credentials",
+    )
+    args, _ = parser.parse_known_args()
+    return args.credentials_dir
+
+
+def get_accounts_file() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--accounts-file",
+        type=str,
+        default="./.accounts.json",
+        help="Path to accounts configuration file",
+    )
+    args, _ = parser.parse_known_args()
+    return args.accounts_file
+
+
 CLIENTSECRETS_LOCATION = get_kauth_file()
 
 # Configuration - should be moved to environment variables
@@ -83,36 +107,12 @@ class AccountInfo(pydantic.BaseModel):
         return f"""Account for email: {self.email} of type: {self.account_type}. Extra info for: {self.extra_info}"""
 
 
-def get_accounts_file() -> str:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--accounts-file",
-        type=str,
-        default="./.accounts.json",
-        help="Path to accounts configuration file",
-    )
-    args, _ = parser.parse_known_args()
-    return args.accounts_file
-
-
 def get_account_info() -> list[AccountInfo]:
     accounts_file = get_accounts_file()
     with open(accounts_file) as f:
         data = json.load(f)
         accounts = data.get("accounts", [])
         return [AccountInfo.model_validate(acc) for acc in accounts]
-
-
-def get_credentials_dir() -> str:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--credentials-dir",
-        type=str,
-        default=".",
-        help="Directory to store OAuth2 credentials",
-    )
-    args, _ = parser.parse_known_args()
-    return args.credentials_dir
 
 
 def _get_credential_filename(email_address: str) -> str:
