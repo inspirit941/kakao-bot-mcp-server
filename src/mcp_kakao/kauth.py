@@ -6,7 +6,6 @@ import pydantic
 import requests
 import json
 import time
-import httplib2
 
 from oauth2client.client import (
     flow_from_clientsecrets,
@@ -33,10 +32,34 @@ def get_kauth_file() -> str:
     return args.kauth_file
 
 
+def get_credentials_dir() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--credentials-dir",
+        type=str,
+        default=".",
+        help="Directory to store OAuth2 credentials",
+    )
+    args, _ = parser.parse_known_args()
+    return args.credentials_dir
+
+
+def get_accounts_file() -> str:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--accounts-file",
+        type=str,
+        default="./.accounts.json",
+        help="Path to accounts configuration file",
+    )
+    args, _ = parser.parse_known_args()
+    return args.accounts_file
+
+
 CLIENTSECRETS_LOCATION = get_kauth_file()
 
 # Configuration - should be moved to environment variables
-REDIRECT_URI = "http://localhost:8000/auth/callback"
+REDIRECT_URI = "http://localhost:8000/code"
 TOKEN_INFO_URL = "https://kapi.kakao.com/v1/user/access_token_info"
 SCOPES = ["openid", "profile_nickname", "talk_message", "account_email"]
 
@@ -83,18 +106,6 @@ class AccountInfo(pydantic.BaseModel):
         return f"""Account for email: {self.email} of type: {self.account_type}. Extra info for: {self.extra_info}"""
 
 
-def get_accounts_file() -> str:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--accounts-file",
-        type=str,
-        default="./.accounts.json",
-        help="Path to accounts configuration file",
-    )
-    args, _ = parser.parse_known_args()
-    return args.accounts_file
-
-
 def get_account_info() -> list[AccountInfo]:
     accounts_file = get_accounts_file()
     with open(accounts_file) as f:
@@ -103,24 +114,12 @@ def get_account_info() -> list[AccountInfo]:
         return [AccountInfo.model_validate(acc) for acc in accounts]
 
 
-def get_credentials_dir() -> str:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--credentials-dir",
-        type=str,
-        default=".",
-        help="Directory to store OAuth2 credentials",
-    )
-    args, _ = parser.parse_known_args()
-    return args.credentials_dir
-
-
 def _get_credential_filename(email_address: str) -> str:
     creds_dir = get_credentials_dir()
     return os.path.join(creds_dir, f".oauth2.{email_address}.json")
 
 
-def get_authorization_url(state: str):
+def get_authorization_url(email_address: str, state: str):
     """Retrieve the authorization URL.
 
     Args:
@@ -208,11 +207,12 @@ def exchange_code(authorization_code):
         raise CodeExchangeException(None)
 
 
-def refresh_token(credentials: OAuth2Credentials):
+def refresh_token(credentials: OAuth2Credentials, email_address: str):
     """Refresh the access token of the given credentials if expired.
 
     Args:
         credentials: OAuth2Credentials instance with refresh token
+        email_address: User's e-mail address.
 
     Returns:
         Updated OAuth2Credentials instance
@@ -261,15 +261,7 @@ def refresh_token(credentials: OAuth2Credentials):
         token_data = response.json()
 
         credentials = credentials.from_json(token_data)
-        # Update the credentials with new data
-        # credentials.access_token = token_data["access_token"]
-        # credentials.token_expiry = credentials._datetime_from_seconds(
-        #     int(time.time()) + token_data["expires_in"]
-        # )
-        #
-        # # Some implementations return a new refresh token, check if one is included
-        # if "refresh_token" in token_data:
-        #     credentials.refresh_token = token_data["refresh_token"]
+        store_credentials(credentials=credentials, email_address=email_address)
 
         logging.info("Successfully refreshed access token")
         return credentials
@@ -292,7 +284,7 @@ def get_user_info(credentials: OAuth2Credentials):
         # Check if the access token is expired and refresh if needed
         if credentials.access_token_expired:
             logging.info("Access token is expired, refreshing")
-            credentials = refresh_token(credentials)
+            credentials = refresh_token(credentials, credentials.id_token['email'])
 
         # Make the request with current/refreshed token
         headers = {
@@ -328,7 +320,7 @@ def get_user_info(credentials: OAuth2Credentials):
         raise
 
 
-def get_credentials(authorization_code, state):
+def get_credentials(authorization_code: str, state: str):
     """Retrieve credentials using the provided authorization code.
 
     This function exchanges the authorization code for an access token and queries
@@ -354,41 +346,31 @@ def get_credentials(authorization_code, state):
     try:
         credentials = exchange_code(authorization_code)
         import json
+        # Get user info to store with credentials
+        try:
+            user_info = get_user_info(credentials)
+            # If we have user email, use it as the identifier
+            if not (user_info and "kakao_account" in user_info and "email" in user_info["kakao_account"]):
+                raise NoUserEmailException()
 
-        if credentials.refresh_token is not None:
-            # Get user info to store with credentials
-            try:
-                user_info = get_user_info(credentials)
-                # If we have user email, use it as the identifier
-                if (
-                        user_info
-                        and "kakao_account" in user_info
-                        and "email" in user_info["kakao_account"]
-                ):
-                    email_address = user_info["kakao_account"]["email"]
-                # Otherwise use Kakao user ID
-                elif user_info and "id" in user_info:
-                    email_address = str(user_info["id"])
-            except Exception as e:
-                logging.warning(f"Failed to get user info: {e}")
-                # Use a timestamp as a fallback for the credential filename
-                email_address = f"user_{int(time.time())}"
+            email_address = user_info["kakao_account"]["email"]
 
-            store_credentials(credentials, email_address=email_address)
-            return credentials
-        else:
-            credentials = get_stored_credentials(email_address=email_address)
-            if credentials and credentials.refresh_token is not None:
-                return credentials
+        except Exception as e:
+            logging.warning(f"Failed to get user info: {e}")
+            # Use a timestamp as a fallback for the credential filename
+            raise e
+
+        store_credentials(credentials, email_address=email_address)
+        return credentials
     except CodeExchangeException as error:
         logging.error("An error occurred during code exchange.")
         # Drive apps should try to retrieve the user and credentials for the current
         # session.
         # If none is available, redirect the user to the authorization URL.
-        error.authorization_url = get_authorization_url(state)
+        error.authorization_url = get_authorization_url(email_address=email_address, state=state)
         raise error
     except NoUserEmailException:
         logging.error("No user email could be retrieved.")
         # No refresh token has been retrieved.
-    authorization_url = get_authorization_url(state)
+    authorization_url = get_authorization_url(email_address=email_address, state=state)
     raise NoRefreshTokenException(authorization_url)
