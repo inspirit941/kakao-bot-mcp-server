@@ -14,11 +14,10 @@ https://developers.kakao.com/docs/latest/ko/kakaotalk-message/rest-api
 
 ## Tools
 
-### 나에게 보내기
-
 All tools require the `__email_address__` input to identify the user's credentials.
 
-참고문서: https://developers.kakao.com/docs/latest/ko/kakaotalk-message/rest-api#default-template-msg-me
+- 작성시점 기준, '나에게 보내기 - 기본 템플릿' API만 지원됩니다.
+- 참고문서: https://developers.kakao.com/docs/latest/ko/kakaotalk-message/rest-api#default-template-msg-me
 
 1.  **send_text_template_to_me**
     *   Description: Sends a Kakao Talk text message to me.
