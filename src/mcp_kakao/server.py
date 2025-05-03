@@ -102,7 +102,12 @@ def get_tool_handler(name: str) -> toolhandler.ToolHandler | None:
     return tool_handlers[name]
 
 
-add_tool_handler(tools_message.SendMessageToMeToolHandler())
+add_tool_handler(tools_message.SendCalendarTemplateToMeToolHandler())
+add_tool_handler(tools_message.SendCommerceTemplateToMeToolHandler())
+add_tool_handler(tools_message.SendLocationTemplateToMeToolHandler())
+add_tool_handler(tools_message.SendFeedTemplateToMeToolHandler())
+add_tool_handler(tools_message.SendListTemplateToMeToolHandler())
+add_tool_handler(tools_message.SendTextTemplateToMeToolHandler())
 
 
 @app.list_tools()
