@@ -6,6 +6,8 @@ from mcp_kakao import toolhandler
 from mcp_kakao.kauth import (
     get_stored_credentials,
     refresh_token,
+    TokenRefreshError,
+    get_authorization_url,
 )
 
 import json
@@ -72,14 +74,44 @@ class BaseKakaoTemplateToolHandler(toolhandler.ToolHandler):
 
             credentials = get_stored_credentials(email_address)
 
-            if credentials.access_token_expired:
-                credentials = refresh_token(credentials)
+            if credentials is None or credentials.access_token_expired:
+                # Attempt to refresh if credentials exist but are expired
+                # If no credentials exist, refresh_token will raise an error if no refresh token
+                try:
+                    credentials = refresh_token(
+                        credentials, email_address=email_address
+                    )
+                except TokenRefreshError as e:
+                    logging.error(f"Token refresh failed: {e}")
+                    # If refresh fails (e.g., expired refresh token), provide login URL
+                    auth_url = get_authorization_url(
+                        email_address=email_address, state=""
+                    )  # Provide login URL
+                    return [
+                        TextContent(
+                            type="text",
+                            text=f"Your Kakao token needs to be refreshed. Please log in again using this URL: {auth_url}",
+                        )
+                    ]
+                # If credentials were None initially and refresh_token didn't raise, something is wrong,
+                # but the subsequent use of credentials will likely raise an error caught below.
+
+            # Ensure credentials are valid after potential refresh
+            if credentials is None or not credentials.access_token:
+                auth_url = get_authorization_url(
+                    email_address=email_address, state=""
+                )  # Provide login URL if still no valid credentials
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Could not retrieve or refresh Kakao credentials. Please log in again using this URL: {auth_url}",
+                    )
+                ]
 
             message_service = KakaoMessageService(
                 email_address=email_address, credential=credentials
             )
 
-            # Subclasses will implement _send_specific_template
             response = self._send_specific_template(message_service, args)
 
             return self._handle_response(response)
