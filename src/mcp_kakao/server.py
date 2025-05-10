@@ -12,7 +12,7 @@ from mcp.server import Server
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from typing_extensions import Any, Sequence
 
-from mcp_kakao import toolhandler
+from mcp_kakao import toolhandler, tools_calendar
 from mcp_kakao import kauth, tools_message
 
 
@@ -108,6 +108,10 @@ add_tool_handler(tools_message.SendLocationTemplateToMeToolHandler())
 add_tool_handler(tools_message.SendFeedTemplateToMeToolHandler())
 add_tool_handler(tools_message.SendListTemplateToMeToolHandler())
 add_tool_handler(tools_message.SendTextTemplateToMeToolHandler())
+add_tool_handler(tools_calendar.GetCalendarListToolHandler())
+add_tool_handler(tools_calendar.CreateSubCalendarToolHandler())
+add_tool_handler(tools_calendar.DeleteSubCalendarToolHandler())
+add_tool_handler(tools_calendar.UpdateSubCalendarToolHandler())
 
 
 @app.list_tools()

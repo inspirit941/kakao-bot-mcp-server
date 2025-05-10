@@ -48,6 +48,9 @@ claude desktop으로 MCP tool 실행
 
 All tools require the `__email_address__` input to identify the user's credentials.
 
+<details>
+<summary><h3>Kakao TalkMessage API</h3></summary>
+
 - 작성시점 기준, '나에게 보내기 - 기본 템플릿' API만 지원됩니다.
 - 참고문서: https://developers.kakao.com/docs/latest/ko/kakaotalk-message/rest-api#default-template-msg-me
 
@@ -154,6 +157,46 @@ All tools require the `__email_address__` input to identify the user's credentia
             *   `discount_price` (integer, optional)
             *   `discount_rate` (integer, optional, 0-100)
         *   `buttons` (array of objects, optional): Buttons to include with the message. (Each object requires `title` and `link`)
+</details>
+
+<details>
+<summary><h3>Kakao TalkCalendar API</h3></summary>
+
+- 카카오 톡캘린더 API를 통해 사용자의 캘린더를 조회하고 관리하는 도구입니다.
+  - 작성시점 기준 '사용자 캘린더 - 목록 가져오기, 서브 캘린더 생성 / 수정 / 삭제' 기능만 지원됩니다.
+  - 톡캘린더 API는 카카오에 사용 권한을 신청해야 합니다. 신청 방법은 https://developers.kakao.com/docs/latest/ko/talkcalendar/common#policy-request-permission 를 참고하세요.
+- 참고문서: https://developers.kakao.com/docs/latest/ko/talkcalendar/rest-api
+
+1. **get_calendar_list**
+   * Description: Retrieves the list of user calendars.
+   * Inputs:
+     * `__email_address__` (string, required): The email address associated with the Kakao account.
+
+2. **create_sub_calendar**
+   * Description: Creates a new sub-calendar for the user.
+   * Inputs:
+     * `__email_address__` (string, required): The email address associated with the Kakao account.
+     * `name` (string, required): The name of the sub calendar.
+     * `color` (string, optional): The default color for events in the calendar.
+     * `reminder` (integer, optional): The default reminder time for non-all-day events in minutes.
+     * `reminder_all_day` (integer, optional): The default reminder time for all-day events in minutes.
+
+3. **update_sub_calendar**
+   * Description: Updates an existing sub-calendar.
+   * Inputs:
+     * `__email_address__` (string, required): The email address associated with the Kakao account.
+     * `calendar_id` (string, required): The ID of the sub calendar to update.
+     * `name` (string, optional): The new name for the sub calendar.
+     * `color` (string, optional): The new default color for events in the calendar.
+     * `reminder` (integer, optional): The new default reminder time for non-all-day events in minutes.
+     * `reminder_all_day` (integer, optional): The new default reminder time for all-day events in minutes.
+
+4. **delete_sub_calendar**
+   * Description: Deletes a user's sub-calendar.
+   * Inputs:
+     * `__email_address__` (string, required): The email address associated with the Kakao account.
+     * `calendar_id` (string, required): The ID of the sub calendar to delete.
+</details>
 
 ### installation
 
@@ -191,6 +234,7 @@ requirements: Python 3.13+
 
 - 제품 설정 > 카카오 로그인 > 동의항목에서 '닉네임', '카카오계정(이메일)', '카카오톡 메시지 전송' 을 활성화한다.
 - OpenID 활성화한다.
+- 톡캘린더 API가 필요한 경우 https://developers.kakao.com/docs/latest/ko/talkcalendar/common#policy-request-permission 를 참고해서 사용 권한을 신청해야 한다.
 
 </details>
 
