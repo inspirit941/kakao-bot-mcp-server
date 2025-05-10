@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any, List
 from oauth2client.client import OAuth2Credentials
 from requests import Response
 
-from src.api.calendar import (
+from api.talk_calendar import (
     Calendar,
     CalendarListResponse,
     CreateSubCalendarRequest,
@@ -23,7 +23,7 @@ class KakaoCalendarService:
         self.credential = credential
 
     def _make_request(
-        self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None
+            self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None
     ) -> Response:
         """
         Helper method to make a request to the Kakao Calendar API.

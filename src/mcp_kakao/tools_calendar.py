@@ -14,9 +14,9 @@ import json
 import logging
 import requests
 
-from mcp_kakao.calendar import KakaoCalendarService
+from mcp_kakao.talk_calendar import KakaoCalendarService
 from pydantic import ValidationError
-from src.api.calendar import (
+from api.talk_calendar import (
     CalendarListResponse,
     CreateSubCalendarRequest,
     UpdateSubCalendarRequest,

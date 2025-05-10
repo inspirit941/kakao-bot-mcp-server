@@ -6,6 +6,7 @@ import pydantic
 import requests
 import json
 import time
+import datetime
 
 from oauth2client.client import (
     flow_from_clientsecrets,
@@ -91,6 +92,7 @@ class NoUserEmailException(Exception):
 
 class TokenRefreshError(Exception):
     """Error raised when token refresh fails."""
+
     pass
 
 
@@ -251,7 +253,11 @@ def refresh_token(credentials: OAuth2Credentials, email_address: str):
             "refresh_token": credentials.refresh_token,
         }
 
-        response = requests.post(KAKAO_TOKEN_URL, data=refresh_data)
+        response = requests.post(
+            KAKAO_TOKEN_URL,
+            data=refresh_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
+        )
 
         if response.status_code != 200:
             logging.error(f"Token refresh failed: {response.status_code}")
@@ -260,7 +266,70 @@ def refresh_token(credentials: OAuth2Credentials, email_address: str):
 
         token_data = response.json()
 
-        credentials = credentials.from_json(token_data)
+        # Manually update credentials fields
+        credentials.access_token = token_data.get("access_token")
+        credentials.token_type = token_data.get("token_type", "bearer")
+
+        # Handle id_token (JWT format) parsing
+        id_token_jwt = token_data.get("id_token")
+        if id_token_jwt:
+            # Store the raw JWT
+            credentials.id_token_jwt = id_token_jwt
+
+            # Parse the JWT payload
+            try:
+                # JWT consists of header.payload.signature
+                # Split by dots and take the second part (payload)
+                payload_base64 = id_token_jwt.split(".")[1]
+
+                # Add padding for proper base64 decoding if needed
+                padding_needed = len(payload_base64) % 4
+                if padding_needed:
+                    payload_base64 += "=" * (4 - padding_needed)
+
+                # Base64 decode and parse as JSON
+                import base64
+
+                payload_bytes = base64.urlsafe_b64decode(payload_base64)
+                payload_json = payload_bytes.decode("utf-8")
+                payload = json.loads(payload_json)
+
+                # Store the parsed payload in id_token field
+                credentials.id_token = payload
+            except Exception as e:
+                logging.warning(f"Failed to parse id_token JWT: {str(e)}")
+                # Even if parsing fails, we keep the JWT itself
+
+        # Update refresh token only if a new one is provided in the response
+        new_refresh_token = token_data.get("refresh_token")
+        if new_refresh_token:
+            credentials.refresh_token = new_refresh_token
+
+        # Calculate and update token expiry time
+        expires_in = token_data.get("expires_in")
+        if expires_in is not None:
+            # Create a timezone-naive datetime object (no UTC timezone info)
+            # OAuth2Credentials expects a naive datetime for compatibility
+            expiry_time = datetime.datetime.utcnow() + datetime.timedelta(
+                seconds=int(expires_in)
+            )
+
+            # Store as a naive datetime to avoid timezone comparison issues
+            credentials.token_expiry = expiry_time
+
+            # For logging or diagnostic purposes only
+            expiry_str = expiry_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            logging.info(f"New token expiry set to: {expiry_str}")
+
+        # Update scopes - only if present in the response
+        scope_string = token_data.get("scope")
+        if scope_string:
+            credentials.scopes = scope_string.split()
+
+        # Instead of credentials.from_json(token_data),
+        # we manually updated the credentials object above.
+        # Now just store the updated credentials.
+
         store_credentials(credentials=credentials, email_address=email_address)
 
         logging.info("Successfully refreshed access token")
@@ -284,7 +353,7 @@ def get_user_info(credentials: OAuth2Credentials):
         # Check if the access token is expired and refresh if needed
         if credentials.access_token_expired:
             logging.info("Access token is expired, refreshing")
-            credentials = refresh_token(credentials, credentials.id_token['email'])
+            credentials = refresh_token(credentials, credentials.id_token["email"])
 
         # Make the request with current/refreshed token
         headers = {
@@ -305,7 +374,11 @@ def get_user_info(credentials: OAuth2Credentials):
         user_info = response.json()
 
         # Verify the user has an ID
-        if not user_info or "kakao_account" not in user_info or "email" not in user_info["kakao_account"]:
+        if (
+            not user_info
+            or "kakao_account" not in user_info
+            or "email" not in user_info["kakao_account"]
+        ):
             logging.error("No user ID found in response")
             raise NoUserEmailException()
 
@@ -346,11 +419,16 @@ def get_credentials(authorization_code: str, state: str):
     try:
         credentials = exchange_code(authorization_code)
         import json
+
         # Get user info to store with credentials
         try:
             user_info = get_user_info(credentials)
             # If we have user email, use it as the identifier
-            if not (user_info and "kakao_account" in user_info and "email" in user_info["kakao_account"]):
+            if not (
+                user_info
+                and "kakao_account" in user_info
+                and "email" in user_info["kakao_account"]
+            ):
                 raise NoUserEmailException()
 
             email_address = user_info["kakao_account"]["email"]
@@ -367,7 +445,9 @@ def get_credentials(authorization_code: str, state: str):
         # Drive apps should try to retrieve the user and credentials for the current
         # session.
         # If none is available, redirect the user to the authorization URL.
-        error.authorization_url = get_authorization_url(email_address=email_address, state=state)
+        error.authorization_url = get_authorization_url(
+            email_address=email_address, state=state
+        )
         raise error
     except NoUserEmailException:
         logging.error("No user email could be retrieved.")
